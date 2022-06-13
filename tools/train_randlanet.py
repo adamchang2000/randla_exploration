@@ -138,42 +138,44 @@ def main():
             optimizer.step()
             optimizer.zero_grad()
 
-            # if batch_id != 0 and batch_id % (len(dataloader) // (40 * (old_batch_size if cfg.old_batch_mode else 1))) == 0:
-            #     logger.info('Epoch {} | Batch {} | loss:{}'.format(epoch, batch_id, loss.item()))
-            #     torch.save(estimator.state_dict(), '{0}/randla_seg_model_current.pth'.format(cfg.outf))
+            if batch_id != 0 and batch_id % (len(dataloader) // (40 * (old_batch_size if cfg.old_batch_mode else 1))) == 0:
+                logger.info('Epoch {} | Batch {} | loss:{}'.format(epoch, batch_id, loss.item()))
+                torch.save(estimator.state_dict(), '{0}/randla_seg_model_current.pth'.format(cfg.outf))
 
         print('>>>>>>>>----------epoch {0} train finish---------<<<<<<<<'.format(epoch))
 
         if lr_scheduler:
             lr_scheduler.step()
+        
+        torch.save(estimator.state_dict(), '{0}/randla_seg_model_current.pth'.format(cfg.outf))
 
         logger = setup_logger('epoch%d_test' % epoch, os.path.join(cfg.log_dir, 'epoch_%d_test_log.txt' % epoch))
         logger.info('Test time {0}'.format(time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - st_time)) + ', ' + 'Testing started'))
         test_acc_avg = 0.0
         test_count = 0
-        # estimator.eval()
+        estimator.eval()
 
-        # with torch.no_grad():
-        #     trange = tqdm(enumerate(test_dataloader), total=len(test_dataloader), desc="testing")
-        #     for batch_id, end_points in trange:
+        with torch.no_grad():
+            trange = tqdm(enumerate(test_dataloader), total=len(test_dataloader), desc="testing")
+            for batch_id, end_points in trange:
 
-        #         end_points_cuda = {}
-        #         for k, v in end_points.items():
-        #             end_points_cuda[k] = Variable(v).cuda()
+                end_points_cuda = {}
+                for k, v in end_points.items():
+                    end_points_cuda[k] = Variable(v).cuda()
 
-        #         end_points = end_points_cuda
+                end_points = end_points_cuda
 
-        #         end_points = randla_processing(end_points, cfg)
+                end_points = randla_processing(end_points, cfg)
 
-        #         end_points = estimator(end_points)
+                end_points = estimator(end_points)
 
-        #         loss, acc = criterion(end_points)
+                loss, acc = criterion(end_points)
 
-        #         test_acc_avg += acc.item()
-        #         test_count += 1
-        #         trange.set_postfix(acc=(test_acc_avg / test_count))
+                test_acc_avg += acc.item()
+                test_count += 1
+                trange.set_postfix(acc=(test_acc_avg / test_count))
 
-        #         logger.info('Epoch {} | Batch {} | acc:{}'.format(epoch, batch_id, acc.item()))
+                logger.info('Epoch {} | Batch {} | acc:{}'.format(epoch, batch_id, acc.item()))
 
 
 if __name__ == '__main__':
