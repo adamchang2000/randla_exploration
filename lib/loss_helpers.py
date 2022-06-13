@@ -1,1 +1,0 @@
-FRONT_LOSS_COEFF = 1

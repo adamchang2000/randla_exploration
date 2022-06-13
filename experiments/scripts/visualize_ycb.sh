@@ -6,4 +6,4 @@ set -e
 export PYTHONUNBUFFERED="True"
 export CUDA_VISIBLE_DEVICES=0
 
-python ./tools/visualize_ycb_points.py --model "trained_models/ycb/pose_model_current.pth" --use_posecnn_rois
+python ./tools/visualize_segmentation.py --model "archive_trained_models/4-27 first training/randla_seg_model_current.pth"

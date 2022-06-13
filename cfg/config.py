@@ -1,17 +1,14 @@
 import yaml
 import sys
 
-
 class ConfigRandLA:
     def __init__(self):
         self.k_n = 32  # KNN
         self.num_layers = 2  # Number of layers
-        self.num_points = 1024  # Number of input points
         self.num_classes = 22  # Number of valid classes
 
         self.sub_sampling_ratio = [4, 4]  # sampling ratio of random sampling at each layer
         self.d_out = [32, 64]  # feature dimension
-        self.num_sub_points = [self.num_points // 4, self.num_points // 16]
 
 class Config(yaml.YAMLObject):
 
@@ -23,7 +20,7 @@ class Config(yaml.YAMLObject):
         self.use_colors = True #use colors for pcld features
 
         self.old_batch_mode = False #old_batch_mode = accumulate gradients
-        self.batch_size = 6
+        self.batch_size = 8
         self.workers = 8
 
         self.decay_margin = 0.015
@@ -76,7 +73,7 @@ class YCBConfig(Config):
         self.root = "./datasets/ycb/YCB_Video_Dataset"
 
         self.num_objects = 21 #number of object classes in the dataset
-        self.num_points = 1024 #number of points on the input pointcloud
+        self.num_points = 640 * 480 // 24 #number of points on the input pointcloud
         self.outf = 'trained_models/ycb' #folder to save trained models
         self.log_dir = 'experiments/logs/ycb' #folder to save logs
         self.repeat_epoch = 1 #number of repeat times for one epoch training

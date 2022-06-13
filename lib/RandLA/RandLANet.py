@@ -35,8 +35,10 @@ class Network(nn.Module):
                 d_out = 2 * self.config.d_out[-(self.config.num_layers)]
             self.decoder_blocks.append(pt_utils.Conv2d(d_in, d_out, kernel_size=(1,1), bn=cfg.batch_norm))
 
-        self.fc1 = pt_utils.Conv2d(d_out, 128, kernel_size=(1,1), bn=cfg.batch_norm)
-        self.fc2 = pt_utils.Conv2d(128, 128, kernel_size=(1,1), bn=cfg.batch_norm)
+        self.fc1 = pt_utils.Conv2d(d_out, 64, kernel_size=(1,1), bn=cfg.batch_norm)
+        self.fc2 = pt_utils.Conv2d(64, 32, kernel_size=(1,1), bn=cfg.batch_norm)
+        self.dropout = nn.Dropout(0.5)
+        self.fc3 = pt_utils.Conv2d(32, self.config.num_classes, kernel_size=(1,1), bn=False, activation=None)
 
     def forward(self, end_points):
 
@@ -75,6 +77,13 @@ class Network(nn.Module):
         features = self.fc2(features)
 
         end_points["RLA_embeddings"] = features.squeeze(3)
+
+        features = self.dropout(features)
+        features = self.fc3(features)
+        f_out = features.squeeze(3)
+
+        end_points['RLA_logits'] = f_out
+        return end_points
 
         return end_points
 
@@ -182,10 +191,32 @@ class Building_block(nn.Module):
     def __init__(self, d_out, cfg):  #  d_in = d_out//2
         super().__init__()
         self.mlp1 = pt_utils.Conv2d(10, d_out//2, kernel_size=(1,1), bn=cfg.batch_norm)
-        self.att_pooling_1 = Att_pooling(d_out, d_out//2, cfg)
+        #self.att_pooling_1 = Att_pooling_KQV(d_out // 2, d_out // 2, d_out, d_out // 2, cfg)
+        self.att_pooling_1 = Att_pooling(d_out, d_out // 2, cfg)
 
         self.mlp2 = pt_utils.Conv2d(d_out//2, d_out//2, kernel_size=(1, 1), bn=cfg.batch_norm)
+        #self.att_pooling_2 = Att_pooling_KQV(d_out //2, d_out // 2, d_out, d_out, cfg)
         self.att_pooling_2 = Att_pooling(d_out, d_out, cfg)
+
+    # def forward(self, xyz, feature, neigh_idx):  # feature: Batch*channel*npoints*1
+    #     f_xyz = self.relative_pos_encoding(xyz, neigh_idx)  # batch*npoint*nsamples*10
+    #     f_xyz = f_xyz.permute((0, 3, 1, 2)).contiguous()  # batch*10*npoint*nsamples
+    #     f_xyz = self.mlp1(f_xyz)
+    #     f_neighbours = self.gather_neighbour(
+    #         feature.squeeze(-1).permute((0, 2, 1)).contiguous(),neigh_idx
+    #     )  # batch*npoint*nsamples*channel
+    #     f_neighbours = f_neighbours.permute((0, 3, 1, 2)).contiguous()  # batch*channel*npoint*nsamples
+    #     f_concat = torch.cat([f_neighbours, f_xyz], dim=1)
+    #     f_pc_agg = self.att_pooling_1(feature, f_neighbours, f_concat)  # Batch*channel*npoints*1
+
+    #     f_xyz = self.mlp2(f_xyz)
+    #     f_neighbours = self.gather_neighbour(
+    #         f_pc_agg.squeeze(-1).permute((0, 2, 1)).contiguous(), neigh_idx
+    #     ).contiguous()  # batch*npoint*nsamples*channel
+    #     f_neighbours = f_neighbours.permute((0, 3, 1, 2)).contiguous()  # batch*channel*npoint*nsamples
+    #     f_concat = torch.cat([f_neighbours, f_xyz], dim=1)
+    #     f_pc_agg = self.att_pooling_2(feature, f_neighbours, f_concat)
+    #     return f_pc_agg
 
     def forward(self, xyz, feature, neigh_idx):  # feature: Batch*channel*npoints*1
         f_xyz = self.relative_pos_encoding(xyz, neigh_idx)  # batch*npoint*nsamples*10
@@ -239,6 +270,29 @@ class Att_pooling(nn.Module):
         att_activation = self.fc(feature_set)
         att_scores = F.softmax(att_activation, dim=3)
         f_agg = feature_set * att_scores
+        f_agg = torch.sum(f_agg, dim=3, keepdim=True)
+        f_agg = self.mlp(f_agg)
+        return f_agg
+
+class Att_pooling_KQV(nn.Module):
+    def __init__(self, k_d_in, q_d_in, v_d_in, d_out, cfg, kq_h_dim=16):
+        super().__init__()
+        self.fc_k = nn.Conv2d(k_d_in, kq_h_dim, (1, 1), bias=False)
+        self.fc_q = nn.Conv2d(q_d_in, kq_h_dim, (1, 1), bias=False)
+        self.fc_scores = nn.Conv2d(kq_h_dim * 2, 1, (1, 1), bias=False)
+        self.mlp = pt_utils.Conv2d(v_d_in, d_out, kernel_size=(1,1), bn=cfg.batch_norm)
+
+        self.cfg = cfg
+
+    def forward(self, features_k, features_q, features_v):
+        key = F.tanh(self.fc_k(features_k))
+        key = key.repeat(1, 1, 1, self.cfg.rndla_cfg.k_n)
+        queries = F.tanh(self.fc_q(features_q))
+        values = features_v
+
+        att_scores = F.softmax(self.fc_scores(torch.cat([key, queries], dim=1)), dim=3)
+
+        f_agg = values * att_scores
         f_agg = torch.sum(f_agg, dim=3, keepdim=True)
         f_agg = self.mlp(f_agg)
         return f_agg

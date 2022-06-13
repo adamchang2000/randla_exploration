@@ -5,5 +5,7 @@ set -e
 
 export PYTHONUNBUFFERED="True"
 export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
 
-python ./tools/eval_ycb.py --model trained_models/ycb/pose_model_current.pth
+python ./tools/train_randlanet_toy.py
